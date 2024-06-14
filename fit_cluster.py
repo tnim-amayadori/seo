@@ -3,7 +3,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 
 # CSVファイルを読み込む
-df = pd.read_csv('categorize_input.csv')
+df = pd.read_csv('data/categorize_input.csv')
 
 # TfidfVectorizerを初期化します
 vectorizer = TfidfVectorizer()
@@ -59,7 +59,7 @@ if optimal_clusters:
     # 結果のクラスタを表示します
     print(df)
     # クラスタをCSVファイルに保存します
-    df.to_csv('categorize_output.csv')
+    df.to_csv('data/categorize_output.csv')
     # 成功メッセージを表示します
     message = f"検索ワードは{optimal_clusters}個のクラスタに正常に分類され、"
     message += f"各クラスタは{min_count}～{max_count}個のデータセットを含みます。"

@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 pandas = "*"
 scikit-learn = "*"
+scipy = "==1.12"
+gensim = "*"
 
 [dev-packages]
 
