@@ -8,6 +8,9 @@ pandas = "*"
 scikit-learn = "*"
 scipy = "==1.12"
 gensim = "*"
+sentence-transformers = "*"
+fugashi = "*"
+ipadic = "*"
 
 [dev-packages]
 
