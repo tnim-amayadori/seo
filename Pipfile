@@ -11,6 +11,8 @@ gensim = "*"
 sentence-transformers = "*"
 fugashi = "*"
 ipadic = "*"
+openai = "*"
+tiktoken = "*"
 
 [dev-packages]
 
