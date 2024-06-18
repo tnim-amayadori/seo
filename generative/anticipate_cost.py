@@ -1,4 +1,5 @@
-from config import api_name
+from config import api_name, csv_arch
+import pandas as pd
 import tiktoken
 
 # コスト計算のための単価.
@@ -23,6 +24,19 @@ _model_out_cst = {
 }
 
 
+def init_cost_col_in(df: pd.DataFrame):
+    df[csv_arch.col_int_in_token] = None
+    df[csv_arch.col_int_in_usd] = None
+    df[csv_arch.col_int_in_jpy] = None
+
+
+def init_cost_col_both(df: pd.DataFrame):
+    init_cost_col_in(df)
+    df[csv_arch.col_int_out_token] = None
+    df[csv_arch.col_int_out_usd] = None
+    df[csv_arch.col_int_out_jpy] = None
+
+
 # トークン数の計測
 def _count_tokens(string: str, model_name: str) -> int:
     encoding = tiktoken.encoding_for_model(model_name)
@@ -42,24 +56,39 @@ def _calculate_cost(token_count, use_def: dict, model):
     return token_count, cost_usd, cost_jy
 
 
-def calculate_in_cost(model, target) -> tuple:
-    token_count = _count_tokens(target, model)
-    token_count, cost_usd, cost_jy = _calculate_cost(token_count, _model_in_cst, model)
-    return token_count, cost_usd, cost_jy
+def calculate_cost(df: pd.DataFrame, i, total_usd, total_jy, model, send_word: str = None, token_count: int = 0,
+                   response: str = None) -> tuple:
+    if send_word:
+        token_count = _count_tokens(send_word, model)
+        model_cst = _model_in_cst
+        col_token = csv_arch.col_int_in_token
+        col_usd = csv_arch.col_int_in_usd
+        col_jpy = csv_arch.col_int_in_jpy
 
-
-def calculate_out_cost(model, token_count: int = 0, response: str = None) -> tuple:
-    if response:
-        token_count = _count_tokens(response, model)
     else:
-        if token_count == 0:
-            msg = "Error： One of [token_count] or [response] is requirement"
-            msg += " on calling [calculate_out_cost()] on [anticipate_cost.py]."
-            print(msg)
-            return 0, 0, 0
+        if response:
+            token_count = _count_tokens(response, model)
+        else:
+            if token_count == 0:
+                msg = "Error： One of [send_word] or [token_count] or [response] is requirement"
+                msg += " on calling [calculate_cost()] on [anticipate_cost.py]."
+                print(msg)
+                return total_usd, total_jy
 
-    token_count, cost_usd, cost_jy = _calculate_cost(token_count, _model_out_cst, model)
-    return token_count, cost_usd, cost_jy
+        model_cst = _model_out_cst
+        col_token = csv_arch.col_int_out_token
+        col_usd = csv_arch.col_int_out_usd
+        col_jpy = csv_arch.col_int_out_jpy
+
+    token_n, usd, jy = _calculate_cost(token_count, model_cst, model)
+
+    df.loc[i, col_token] = token_n
+    df.loc[i, col_usd] = round(usd, 5)
+    df.loc[i, col_jpy] = round(jy, 3)
+
+    total_usd += usd
+    total_jy += jy
+    return total_usd, total_jy
 
 
 def print_cost(total_usd, total_jy, pre_msg=""):

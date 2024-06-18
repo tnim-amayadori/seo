@@ -9,53 +9,34 @@ _out_path_cost = '../data/01_intents-cost_pre.csv'
 _out_path_intent = '../data/02_intents.csv'
 
 # for this.
+_use_model = api_name.model_4o
 _role = "You are an assistant that helps understand user search intent."
 _max_tokens = 300
 _prompt = "以下の検索ワードを入力したユーザーの意図を説明してください。"
 _prompt += "一番可能性が高いと推測されるものを一つだけ、日本語で{max_str}文字以内で説明してください。"
 _prompt += ":\n検索ワード: {term}\n意図:"
-_use_model = api_name.model_4o
-
-
-def _init_cost_col(df: pd.DataFrame):
-    df[csv_arch.col_int_in_token] = None
-    df[csv_arch.col_int_in_usd] = None
-    df[csv_arch.col_int_in_jpy] = None
-    df[csv_arch.col_int_out_token] = None
-    df[csv_arch.col_int_out_usd] = None
-    df[csv_arch.col_int_out_jpy] = None
 
 
 def _anticipate_input(word, df: pd.DataFrame, i, total_usd, total_jy):
     prompt = _prompt.format(term=word, max_str=_max_tokens)
     all_prompt = _role + prompt
-    token_n, usd, jy = anticipate_cost.calculate_in_cost(_use_model, all_prompt)
-    df.loc[i, csv_arch.col_int_in_token] = token_n
-    df.loc[i, csv_arch.col_int_in_usd] = round(usd, 5)
-    df.loc[i, csv_arch.col_int_in_jpy] = round(jy, 3)
-    total_usd += usd
-    total_jy += jy
+    total_usd, total_jy = anticipate_cost.calculate_cost(df, i, total_usd, total_jy, _use_model, send_word=all_prompt)
     return total_usd, total_jy, prompt
 
 
 def _anticipate_output(df: pd.DataFrame, i, total_usd, total_jy, response: str = None):
     if response:
-        token_n, usd, jy = anticipate_cost.calculate_out_cost(_use_model, response=response)
+        total_usd, total_jy = anticipate_cost.calculate_cost(df, i, total_usd, total_jy, _use_model, response=response)
     else:
-        token_n, usd, jy = anticipate_cost.calculate_out_cost(_use_model, token_count=_max_tokens)
-
-    df.loc[i, csv_arch.col_int_out_token] = token_n
-    df.loc[i, csv_arch.col_int_out_usd] = round(usd, 5)
-    df.loc[i, csv_arch.col_int_out_jpy] = round(jy, 3)
-    total_usd += usd
-    total_jy += jy
+        total_usd, total_jy = anticipate_cost.calculate_cost(df, i, total_usd, total_jy, _use_model,
+                                                             token_count=_max_tokens)
     return total_usd, total_jy
 
 
 def pre_anticipate(input_path=_in_path, output_path=_out_path_cost):
     df = pd.read_csv(input_path)
     target_words = df[csv_arch.col_target]
-    _init_cost_col(df)
+    anticipate_cost.init_cost_col_both(df)
     i = 0
     total_usd = 0
     total_jy = 0
@@ -72,14 +53,14 @@ def pre_anticipate(input_path=_in_path, output_path=_out_path_cost):
     anticipate_cost.print_cost(total_usd, total_jy, pre_msg="Get Intent[pre]")
 
     df.to_csv(output_path)
-    print(f"Intents saved to [{output_path}].")
+    print(f"Intents Cost saved to [{output_path}].")
 
 
 def main(input_path=_in_path, output_path=_out_path_intent):
     # Send by data.
     df = pd.read_csv(input_path)
     df[csv_arch.col_intent] = None
-    _init_cost_col(df)
+    anticipate_cost.init_cost_col_both(df)
 
     total_usd = 0
     total_jy = 0
