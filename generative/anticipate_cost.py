@@ -48,8 +48,17 @@ def calculate_in_cost(model, target) -> tuple:
     return token_count, cost_usd, cost_jy
 
 
-def calculate_out_cost(model, max_token) -> tuple:
-    token_count, cost_usd, cost_jy = _calculate_cost(max_token, _model_out_cst, model)
+def calculate_out_cost(model, token_count: int = 0, response: str = None) -> tuple:
+    if response:
+        token_count = _count_tokens(response, model)
+    else:
+        if token_count == 0:
+            msg = "Error： One of [token_count] or [response] is requirement"
+            msg += " on calling [calculate_out_cost()] on [anticipate_cost.py]."
+            print(msg)
+            return 0, 0, 0
+
+    token_count, cost_usd, cost_jy = _calculate_cost(token_count, _model_out_cst, model)
     return token_count, cost_usd, cost_jy
 
 
