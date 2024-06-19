@@ -24,17 +24,32 @@ _model_out_cst = {
 }
 
 
+def _remove_column(df: pd.DataFrame, target_column: str) -> pd.DataFrame:
+    if target_column in df.columns:
+        df = df.drop(columns=[target_column])
+    return df
+
+
 def init_cost_col_in(df: pd.DataFrame):
-    df[csv_arch.col_int_in_token] = None
-    df[csv_arch.col_int_in_usd] = None
-    df[csv_arch.col_int_in_jpy] = None
+    # Clear Columns.
+    df = _remove_column(df, csv_arch.col_in_token)
+    df = _remove_column(df, csv_arch.col_in_usd)
+    df = _remove_column(df, csv_arch.col_in_jpy)
+    df = _remove_column(df, csv_arch.col_out_token)
+    df = _remove_column(df, csv_arch.col_out_usd)
+    df = _remove_column(df, csv_arch.col_out_jpy)
+
+    # Generate in cost.
+    df[csv_arch.col_in_token] = None
+    df[csv_arch.col_in_usd] = None
+    df[csv_arch.col_in_jpy] = None
 
 
 def init_cost_col_both(df: pd.DataFrame):
     init_cost_col_in(df)
-    df[csv_arch.col_int_out_token] = None
-    df[csv_arch.col_int_out_usd] = None
-    df[csv_arch.col_int_out_jpy] = None
+    df[csv_arch.col_out_token] = None
+    df[csv_arch.col_out_usd] = None
+    df[csv_arch.col_out_jpy] = None
 
 
 # トークン数の計測
@@ -61,9 +76,9 @@ def calculate_cost(df: pd.DataFrame, i, total_usd, total_jy, model, send_word: s
     if send_word:
         token_count = _count_tokens(send_word, model)
         model_cst = _model_in_cst
-        col_token = csv_arch.col_int_in_token
-        col_usd = csv_arch.col_int_in_usd
-        col_jpy = csv_arch.col_int_in_jpy
+        col_token = csv_arch.col_in_token
+        col_usd = csv_arch.col_in_usd
+        col_jpy = csv_arch.col_in_jpy
 
     else:
         if response:
@@ -76,9 +91,9 @@ def calculate_cost(df: pd.DataFrame, i, total_usd, total_jy, model, send_word: s
                 return total_usd, total_jy
 
         model_cst = _model_out_cst
-        col_token = csv_arch.col_int_out_token
-        col_usd = csv_arch.col_int_out_usd
-        col_jpy = csv_arch.col_int_out_jpy
+        col_token = csv_arch.col_out_token
+        col_usd = csv_arch.col_out_usd
+        col_jpy = csv_arch.col_out_jpy
 
     token_n, usd, jy = _calculate_cost(token_count, model_cst, model)
 
