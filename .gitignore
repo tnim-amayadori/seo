@@ -82,3 +82,5 @@ fabric.properties
 */ja.bin
 */model.vec
 config/secrets.json
+/debug/
+/bk/

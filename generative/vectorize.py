@@ -57,9 +57,10 @@ def main(input_path=_in_path, output_np=_out_path_vector, out_df=_out_path_df):
     )
     print(f"Received API response.")
 
-    embeddings = response.data[0].embedding
+    embeddings = [data.embedding for data in response.data]
+    embeddings = np.array(embeddings)
 
-    np.save(output_np, np.array(embeddings))
+    np.save(output_np, embeddings)
     print(f"Vectors saved to [{output_np}] .")
 
     df.to_csv(out_df, index=True, index_label=csv_arch.col_df_index)

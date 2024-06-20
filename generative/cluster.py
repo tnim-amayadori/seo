@@ -3,7 +3,8 @@ from generative import anticipate_cost
 import numpy as np
 import openai
 import pandas as pd
-from sklearn.mixture import GaussianMixture
+from sklearn import cluster
+from sklearn.metrics import silhouette_score
 
 # for debug.
 _in_np = '../data/04_vector.npy'
@@ -11,7 +12,7 @@ _in_df = '../data/05_vectorized.csv'
 _out_cost = '../data/06_cluster-cost.csv'
 _out_cluster = '../data/07_cluster.csv'
 _out_final = '../data/categorize_output.csv'
-_in_original = '../data/categorize_input.csv'
+_in_original = '../data/input_sample.csv'
 
 # for this.
 _run_auto_name = True
@@ -19,11 +20,11 @@ _use_model = api_name.model_4o
 _role = "You are an assistant that helps understand user search intent."
 _max_tokens = 20
 _prompt = "以下の検索ワードと意図に対して適切なラベルを生成してください。"
-_prompt += "日本語で{max_str}文字以内で説明してください。"
-_prompt += ":\n検索ワード: {search}\n意図:{intent}"
+_prompt += "日本語で{max_str}文字以内で説明してください。ラベル名の文字列のみを返却してください。"
+_prompt += ":\n検索ワード: {search}\n意図:{intent}\nラベル: "
 
 # 各クラスターのデータ数目安.
-_min_data = 5
+_min_data = 1
 _max_data = 50
 
 
@@ -39,49 +40,56 @@ def _prepare_data(in_np=_in_np, in_df=_in_df):
     return df, embeddings
 
 
-def _gmm_aic(embeddings, df_words):
+def _kmeans_silhouette(embeddings, df_words):
     data_count = df_words.shape[0]
     # データ数に対してクラスター毎の目安のデータ数で割った数のクラスターを上限・下限クラスター数として設定.
     max_cluster = data_count // _min_data + 1
-    print(f"max_cluster[{max_cluster}] = data_count[{data_count}] // min_data[{_min_data}] + 1")
+    if max_cluster >= data_count:
+        max_cluster = data_count - 1
+        print(f"max_cluster[{max_cluster}]")
+    else:
+        print(f"max_cluster[{max_cluster}] = data_count[{data_count}] // min_data[{_min_data}] + 1")
 
     mincluster = data_count // _max_data
-    print(f"mincluster[{mincluster}] = data_count[{data_count}] // max_data[{_max_data}]")
+    if mincluster < 2:
+        mincluster = 2
+        print(f"mincluster[{mincluster}]")
+    else:
+        print(f"mincluster[{mincluster}] = data_count[{data_count}] // max_data[{_max_data}]")
 
-    # 最適なクラスター数をAICにより決定する.
-    min_aic = float('inf')
-    opt_gmm = None
+    # 最適なクラスター数をシルエットスコアにより決定する.
+    best_silhouette = -1
+    opt_kmeans = None
     opt_cluster_n = 0
     for cluster_n in range(mincluster, max_cluster + 1):
-        gmm = GaussianMixture(n_components=cluster_n, random_state=42)
-        gmm.fit(embeddings)
-        aic = gmm.aic(embeddings)
+        kmeans = cluster.KMeans(n_clusters=cluster_n, random_state=42)
+        labels = kmeans.fit_predict(embeddings)
+        silhouette_avg = silhouette_score(embeddings, labels)
 
-        # AICが小さければ更新.
-        if aic > min_aic:
-            continue
-        print(f"Update optimal. cluster=[{cluster_n}]")
-        min_aic = aic
-        opt_gmm = gmm
-        opt_cluster_n = cluster_n
+        # シルエットスコアが高ければ更新.
+        if silhouette_avg > best_silhouette:
+            print(f"Update optimal. cluster=[{cluster_n}], Silhouette Score=[{silhouette_avg}]")
+            best_silhouette = silhouette_avg
+            opt_kmeans = kmeans
+            opt_cluster_n = cluster_n
 
-    # 最適なクラスタ数でのGMMでクラスタリングを実行.
-    if opt_gmm is None:
+    # 最適なクラスタ数でのK-meansでクラスタリングを実行.
+    if opt_kmeans is None:
         print("Unexpected Error. Debug and search [cluster.py].")
         return None, opt_cluster_n
 
-    df_words[csv_arch.col_category] = opt_gmm.predict(embeddings)
+    print(f"Find optimal cluster count. cluster=[{opt_cluster_n}]")
+    df_words[csv_arch.col_category] = opt_kmeans.predict(embeddings)
 
     # カテゴライズ名を自動でつけるための平均ベクトルを保存しておく.
     if not _run_auto_name:
         return None, opt_cluster_n
-    cluster_centers = opt_gmm.means_
+    cluster_centers = opt_kmeans.cluster_centers_
     return cluster_centers, opt_cluster_n
 
 
 def _init_df_cost(cluster_count) -> pd.DataFrame:
-    col_names = [csv_arch.col_c_name]
-    df_cost = pd.DataFrame(np.nan, index=range(cluster_count), columns=col_names)
+    df_cost = pd.DataFrame({csv_arch.col_c_name: [''] * cluster_count})
     return df_cost
 
 
@@ -167,7 +175,7 @@ def pre_anticipate(in_np=_in_np, in_df=_in_df, out_cost=_out_cost):
     df_words, embeddings = _prepare_data(in_np, in_df)
 
     # 最適なクラスター数をAICにより決定する.
-    cluster_centers, cluster_count = _gmm_aic(embeddings, df_words)
+    cluster_centers, cluster_count = _kmeans_silhouette(embeddings, df_words)
 
     # 利用料金計算用の変数初期化.
     df_cost = _init_df_cost(cluster_count)
@@ -193,10 +201,10 @@ def main(in_np=_in_np, in_df=_in_df, out_cost=_out_cost, out_cluster=_out_cluste
     df_words, embeddings = _prepare_data(in_np, in_df)
 
     # 最適なクラスター数をAICにより決定する.
-    cluster_centers, cluster_count = _gmm_aic(embeddings, df_words)
+    cluster_centers, cluster_count = _kmeans_silhouette(embeddings, df_words)
 
     # OpenAIのAPIを利用して自動でカテゴリ名をつける.
-    if cluster_centers:
+    if cluster_centers is not None:
         df_words[csv_arch.col_c_name] = None
         _auto_name(embeddings, df_words, cluster_centers, cluster_count, out_cost)
 
@@ -206,7 +214,7 @@ def main(in_np=_in_np, in_df=_in_df, out_cost=_out_cost, out_cluster=_out_cluste
 
     # 大元のinputにcategoryを追加しただけの最終出力ファイル.
     tmp_category = df_words[csv_arch.col_category]
-    if cluster_centers:
+    if cluster_centers is not None:
         tmp_c_name = df_words[csv_arch.col_c_name]
     else:
         tmp_c_name = None
@@ -215,9 +223,9 @@ def main(in_np=_in_np, in_df=_in_df, out_cost=_out_cost, out_cluster=_out_cluste
     df = anticipate_cost.remove_column(df, csv_arch.col_category)
     df[csv_arch.col_category] = tmp_category
 
-    if tmp_c_name:
+    if tmp_c_name is not None:
         df = anticipate_cost.remove_column(df, csv_arch.col_c_name)
-        df[csv_arch.col_category] = tmp_c_name
+        df[csv_arch.col_c_name] = tmp_c_name
 
     df.to_csv(out_final, index=True, index_label=csv_arch.col_df_index)
     print(f'Categories saved to [{out_final}] finally.')
@@ -225,8 +233,8 @@ def main(in_np=_in_np, in_df=_in_df, out_cost=_out_cost, out_cluster=_out_cluste
 
 if __name__ == "__main__":
     # Anticipate Cost.
-    pre_anticipate()
+    # pre_anticipate()
 
     # Debug.
     secrets.set_api_key('../config/secrets.json')
-    # main()
+    main()
