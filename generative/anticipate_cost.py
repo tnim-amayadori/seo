@@ -24,7 +24,7 @@ _model_out_cst = {
 }
 
 
-def _remove_column(df: pd.DataFrame, target_column: str) -> pd.DataFrame:
+def remove_column(df: pd.DataFrame, target_column: str) -> pd.DataFrame:
     if target_column in df.columns:
         df = df.drop(columns=[target_column])
     return df
@@ -32,12 +32,12 @@ def _remove_column(df: pd.DataFrame, target_column: str) -> pd.DataFrame:
 
 def init_cost_col_in(df: pd.DataFrame):
     # Clear Columns.
-    df = _remove_column(df, csv_arch.col_in_token)
-    df = _remove_column(df, csv_arch.col_in_usd)
-    df = _remove_column(df, csv_arch.col_in_jpy)
-    df = _remove_column(df, csv_arch.col_out_token)
-    df = _remove_column(df, csv_arch.col_out_usd)
-    df = _remove_column(df, csv_arch.col_out_jpy)
+    df = remove_column(df, csv_arch.col_in_token)
+    df = remove_column(df, csv_arch.col_in_usd)
+    df = remove_column(df, csv_arch.col_in_jpy)
+    df = remove_column(df, csv_arch.col_out_token)
+    df = remove_column(df, csv_arch.col_out_usd)
+    df = remove_column(df, csv_arch.col_out_jpy)
 
     # Generate in cost.
     df[csv_arch.col_in_token] = None

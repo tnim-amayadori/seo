@@ -93,7 +93,7 @@ def main(input_path=_in_path, output_path=_out_path_intent):
     # Output cost.
     anticipate_cost.print_cost(total_usd, total_jy, pre_msg="Get Intent[real]")
 
-    df.to_csv(output_path)
+    df.to_csv(output_path, index=True, index_label=csv_arch.col_df_index)
     print(f"Intents saved to [{output_path}].")
 
 

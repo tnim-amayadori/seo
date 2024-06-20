@@ -8,6 +8,7 @@ import pandas as pd
 _in_path = '../data/02_intents.csv'
 _out_path_cost = '../data/03_vector-cost_pre.csv'
 _out_path_vector = '../data/04_vector.npy'
+_out_path_df = '../data/05_vectorized.csv'
 
 # for this.
 _use_model = api_name.model_emb3l
@@ -31,7 +32,7 @@ def _pre_anticipate(df: pd.DataFrame, output_path):
         i += 1
 
     # Output cost.
-    anticipate_cost.print_cost(total_usd, total_jy, pre_msg="Vectorize[pre]")
+    anticipate_cost.print_cost(total_usd, total_jy, pre_msg="Vectorize[real]")
 
     df.to_csv(output_path)
     print(f"Vectorize Cost saved to [{output_path}].")
@@ -43,7 +44,7 @@ def pre_anticipate(input_path=_in_path, output_path=_out_path_cost):
     _pre_anticipate(df, output_path)
 
 
-def main(input_path=_in_path, output_path=_out_path_vector):
+def main(input_path=_in_path, output_np=_out_path_vector, out_df=_out_path_df):
     # Send by data.
     df = pd.read_csv(input_path)
     _concat_intent(df)
@@ -58,8 +59,11 @@ def main(input_path=_in_path, output_path=_out_path_vector):
 
     embeddings = response.data[0].embedding
 
-    np.save(output_path, np.array(embeddings))
-    print(f"ベクトルが [{output_path}] に保存されました。")
+    np.save(output_np, np.array(embeddings))
+    print(f"Vectors saved to [{output_np}] .")
+
+    df.to_csv(out_df, index=True, index_label=csv_arch.col_df_index)
+    print(f"DataFrame saved to [{out_df}].")
 
 
 if __name__ == "__main__":
