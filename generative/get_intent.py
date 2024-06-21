@@ -8,7 +8,8 @@ import pandas as pd
 _in_path = '../data/input_sample.csv'
 out_cost = '01_intents-cost_pre.csv'
 _out_path_cost = '../data/' + out_cost
-_out_path_intent = '../data/02_intents.csv'
+out_intent = '11_intents.csv'
+_out_path_intent = '../data/' + out_intent
 
 # for this.
 _use_model = api_name.model_4o

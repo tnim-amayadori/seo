@@ -10,13 +10,15 @@ from sklearn.metrics import silhouette_score
 # for debug.
 _in_np = '../data/04_vector.npy'
 _in_df = '../data/05_vectorized.csv'
-out_cost_name = '06_cluster-cost'
-out_cost_pre = out_cost_name + '_pre.csv'
-out_cost_name = out_cost_name + '.csv'
+out_cost_name = 'cluster-cost'
+out_cost_pre = '03_' + out_cost_name + '_pre.csv'
+out_cost_name = '15' + out_cost_name + '.csv'
 _out_cost_pre = '../data/' + out_cost_pre
 _out_cost_run = '../data/' + out_cost_name
-_out_cluster = '../data/07_cluster.csv'
-_out_final = '../data/categorize_output.csv'
+out_cluster_name = '16_cluster.csv'
+_out_cluster = '../data/' + out_cluster_name
+out_final_name = 'categorize_output.csv'
+_out_final = '../data/' + out_final_name
 _in_original = '../data/input_sample.csv'
 
 # for this.

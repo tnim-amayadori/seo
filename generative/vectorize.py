@@ -7,10 +7,15 @@ import pandas as pd
 
 # for debug.
 _in_path = '../data/02_intents.csv'
-out_cost = '03_vector-cost_pre.csv'
-_out_path_cost = '../data/' + out_cost
-_out_path_vector = '../data/04_vector.npy'
-_out_path_df = '../data/05_vectorized.csv'
+out_cost_name = 'vector-cost_pre.csv'
+out_cost_pre = '02_' + out_cost_name
+out_cost_name = '12_' + out_cost_name
+_out_cost_pre = '../data/' + out_cost_pre
+_out_cost_run = '../data/' + out_cost_name
+out_vector = '13_vector.npy'
+_out_path_vector = '../data/' + out_vector
+out_vectorize_df = '14_vectorized.csv'
+_out_path_df = '../data/' + out_vectorize_df
 
 # for this.
 _use_model = api_name.model_emb3l
@@ -55,11 +60,11 @@ def pre_anticipate(input_path, output_path):
     return total_usd, total_jy
 
 
-def main(input_path=_in_path, output_np=_out_path_vector, out_df=_out_path_df):
+def main(input_path=_in_path, output_np=_out_path_vector, out_df=_out_path_df, out_cost=_out_cost_run):
     # Send by data.
     df = pd.read_csv(input_path)
     _concat_intent(df, df[csv_arch.col_intent])
-    _pre_anticipate(df, _out_path_cost)
+    _pre_anticipate(df, out_cost)
 
     logging.info(f"Request API.")
     response = openai.embeddings.create(
@@ -82,7 +87,7 @@ if __name__ == "__main__":
     # Anticipate Cost.
     # df = pd.read_csv(_in_path)
     # _concat_intent(df)
-    # _pre_anticipate(df, _out_path_cost)
+    # _pre_anticipate(df, _out_cost_pre)
 
     # Debug.
     secrets.set_api_key('../config/secrets.json')
