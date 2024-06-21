@@ -1,9 +1,13 @@
 from config import api_name, csv_arch
+import logging
 import pandas as pd
 import tiktoken
 
 # コスト計算のための単価.
 _d2j = 160  # 為替レート、1＄当たりの日本円
+
+# 実行前の料金予測用に挿入するサンプル文字列.
+_sample_str = "これはサンプルです。利用料金予測のために仮に生成した文字列です。"
 
 # モデルごとのトークン単価
 # 単価取得のAPIは提供されていないため、下記を参照してメンテナンスしてください。
@@ -22,6 +26,15 @@ _model_out_cst = {
     api_name.model_4o: 15,
     api_name.model_35t: 1.5
 }
+
+
+def get_sample_str(str_count: int) -> str:
+    repeat_str = str_count // len(_sample_str)
+    repeat_str = _sample_str * repeat_str
+    remaining_chars = str_count % len(_sample_str)
+    remaining_chars = _sample_str[:remaining_chars]
+    sample_str = repeat_str + remaining_chars
+    return sample_str
 
 
 def remove_column(df: pd.DataFrame, target_column: str) -> pd.DataFrame:
@@ -63,7 +76,7 @@ def _count_tokens(string: str, model_name: str) -> int:
 def _calculate_cost(token_count, use_def: dict, model):
     cost_per_1m = use_def.get(model, 0)
     if cost_per_1m == 0:
-        print(f"Error：The model [{model}] is not defined in [{use_def}] on [anticipate_cost.py].")
+        logging.error(f"The model [{model}] is not defined in [{use_def}] on [anticipate_cost.py].")
         return token_count, 0, 0
 
     cost_usd = (token_count / 1000000) * cost_per_1m
@@ -85,9 +98,9 @@ def calculate_cost(df: pd.DataFrame, i, total_usd, total_jy, model, send_word: s
             token_count = _count_tokens(response, model)
         else:
             if token_count == 0:
-                msg = "Error： One of [send_word] or [token_count] or [response] is requirement"
+                msg = "One of [send_word] or [token_count] or [response] is requirement"
                 msg += " on calling [calculate_cost()] on [anticipate_cost.py]."
-                print(msg)
+                logging.error(msg)
                 return total_usd, total_jy
 
         model_cst = _model_out_cst
@@ -107,6 +120,7 @@ def calculate_cost(df: pd.DataFrame, i, total_usd, total_jy, model, send_word: s
 
 
 def print_cost(total_usd, total_jy, pre_msg=""):
-    msg = pre_msg + "\n" + f"The anticipated cost is [{total_usd:.3f}]USD=[{total_jy:.1f}]JPY."
-    msg += f"\nThe exchange rate is 1$ = [{_d2j}] yen."
-    print(msg)
+    msg = pre_msg + " : " + f"The anticipated cost is [{total_usd:.3f}]USD=[{total_jy:.1f}]JPY."
+    msg += f" (The exchange rate is 1$ = [{_d2j}] yen.)"
+    logging.info(msg)
+    return msg

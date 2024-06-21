@@ -1,24 +1,26 @@
 from config import api_name, csv_arch, secrets
 from generative import anticipate_cost
+import logging
 import openai
 import pandas as pd
 
 # for debug.
 _in_path = '../data/input_sample.csv'
-_out_path_cost = '../data/01_intents-cost_pre.csv'
+out_cost = '01_intents-cost_pre.csv'
+_out_path_cost = '../data/' + out_cost
 _out_path_intent = '../data/02_intents.csv'
 
 # for this.
 _use_model = api_name.model_4o
 _role = "You are an assistant that helps understand user search intent."
-_max_tokens = 300
+max_tokens = 300
 _prompt = "以下の検索ワードを入力したユーザーの意図を説明してください。"
 _prompt += "一番可能性が高いと推測されるものを一つだけ、日本語で{max_str}文字以内で説明してください。"
 _prompt += ":\n検索ワード: {term}\n意図:"
 
 
 def _anticipate_input(word, df: pd.DataFrame, i, total_usd, total_jy):
-    prompt = _prompt.format(term=word, max_str=_max_tokens)
+    prompt = _prompt.format(term=word, max_str=max_tokens)
     all_prompt = _role + prompt
     total_usd, total_jy = anticipate_cost.calculate_cost(df, i, total_usd, total_jy, _use_model, send_word=all_prompt)
     return total_usd, total_jy, prompt
@@ -29,7 +31,7 @@ def _anticipate_output(df: pd.DataFrame, i, total_usd, total_jy, response: str =
         total_usd, total_jy = anticipate_cost.calculate_cost(df, i, total_usd, total_jy, _use_model, response=response)
     else:
         total_usd, total_jy = anticipate_cost.calculate_cost(df, i, total_usd, total_jy, _use_model,
-                                                             token_count=_max_tokens)
+                                                             token_count=max_tokens)
     return total_usd, total_jy
 
 
@@ -53,7 +55,9 @@ def pre_anticipate(input_path=_in_path, output_path=_out_path_cost):
     anticipate_cost.print_cost(total_usd, total_jy, pre_msg="Get Intent[pre]")
 
     df.to_csv(output_path)
-    print(f"Intents Cost saved to [{output_path}].")
+    logging.info(f"Intents Cost saved to [{output_path}].")
+
+    return total_usd, total_jy
 
 
 def main(input_path=_in_path, output_path=_out_path_intent):
@@ -77,9 +81,9 @@ def main(input_path=_in_path, output_path=_out_path_intent):
                 {"role": "system", "content": _role},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=_max_tokens
+            max_tokens=max_tokens
         )
-        print(f"Received API response. i=[{i}].")
+        logging.info(f"Received API response. i=[{i}].")
 
         # Set response.
         intent = response.choices[0].message.content
@@ -94,7 +98,7 @@ def main(input_path=_in_path, output_path=_out_path_intent):
     anticipate_cost.print_cost(total_usd, total_jy, pre_msg="Get Intent[real]")
 
     df.to_csv(output_path, index=True, index_label=csv_arch.col_df_index)
-    print(f"Intents saved to [{output_path}].")
+    logging.info(f"Intents saved to [{output_path}].")
 
 
 if __name__ == "__main__":

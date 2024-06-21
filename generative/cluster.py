@@ -1,5 +1,6 @@
 from config import api_name, csv_arch, secrets
-from generative import anticipate_cost
+from generative import anticipate_cost, get_intent
+import logging
 import numpy as np
 import openai
 import pandas as pd
@@ -9,7 +10,11 @@ from sklearn.metrics import silhouette_score
 # for debug.
 _in_np = '../data/04_vector.npy'
 _in_df = '../data/05_vectorized.csv'
-_out_cost = '../data/06_cluster-cost.csv'
+out_cost_name = '06_cluster-cost'
+out_cost_pre = out_cost_name + '_pre.csv'
+out_cost_name = out_cost_name + '.csv'
+_out_cost_pre = '../data/' + out_cost_pre
+_out_cost_run = '../data/' + out_cost_name
 _out_cluster = '../data/07_cluster.csv'
 _out_final = '../data/categorize_output.csv'
 _in_original = '../data/input_sample.csv'
@@ -25,7 +30,10 @@ _prompt += ":\n検索ワード: {search}\n意図:{intent}\nラベル: "
 
 # 各クラスターのデータ数目安.
 _min_data = 1
+_data_count_minus = 2
+
 _max_data = 50
+_min_cluster = 2
 
 
 def _prepare_data(in_np=_in_np, in_df=_in_df):
@@ -40,22 +48,28 @@ def _prepare_data(in_np=_in_np, in_df=_in_df):
     return df, embeddings
 
 
-def _kmeans_silhouette(embeddings, df_words):
+def _cluster_range(df_words):
     data_count = df_words.shape[0]
     # データ数に対してクラスター毎の目安のデータ数で割った数のクラスターを上限・下限クラスター数として設定.
     max_cluster = data_count // _min_data + 1
-    if max_cluster >= data_count:
-        max_cluster = data_count - 1
-        print(f"max_cluster[{max_cluster}]")
+    tmp_cluster = data_count - _data_count_minus
+    if max_cluster >= tmp_cluster:
+        max_cluster = tmp_cluster
+        logging.info(f"max_cluster[{max_cluster}] = data_count[{data_count}] - {_data_count_minus}")
     else:
-        print(f"max_cluster[{max_cluster}] = data_count[{data_count}] // min_data[{_min_data}] + 1")
+        logging.info(f"max_cluster[{max_cluster}] = data_count[{data_count}] // min_data[{_min_data}] + 1")
 
     mincluster = data_count // _max_data
-    if mincluster < 2:
-        mincluster = 2
-        print(f"mincluster[{mincluster}]")
+    if mincluster < _min_cluster:
+        mincluster = _min_cluster
+        logging.info(f"mincluster[{mincluster}] = _min_cluster[{_min_cluster}]")
     else:
-        print(f"mincluster[{mincluster}] = data_count[{data_count}] // max_data[{_max_data}]")
+        logging.info(f"mincluster[{mincluster}] = data_count[{data_count}] // max_data[{_max_data}]")
+    return mincluster, max_cluster
+
+
+def _kmeans_silhouette(embeddings, df_words):
+    mincluster, max_cluster = _cluster_range(df_words)
 
     # 最適なクラスター数をシルエットスコアにより決定する.
     best_silhouette = -1
@@ -68,17 +82,17 @@ def _kmeans_silhouette(embeddings, df_words):
 
         # シルエットスコアが高ければ更新.
         if silhouette_avg > best_silhouette:
-            print(f"Update optimal. cluster=[{cluster_n}], Silhouette Score=[{silhouette_avg}]")
+            logging.info(f"Update optimal. cluster=[{cluster_n}], Silhouette Score=[{silhouette_avg}]")
             best_silhouette = silhouette_avg
             opt_kmeans = kmeans
             opt_cluster_n = cluster_n
 
     # 最適なクラスタ数でのK-meansでクラスタリングを実行.
     if opt_kmeans is None:
-        print("Unexpected Error. Debug and search [cluster.py].")
+        logging.error("Unexpected Error. Debug and search [cluster.py].")
         return None, opt_cluster_n
 
-    print(f"Find optimal cluster count. cluster=[{opt_cluster_n}]")
+    logging.info(f"Find optimal cluster count. cluster=[{opt_cluster_n}]")
     df_words[csv_arch.col_category] = opt_kmeans.predict(embeddings)
 
     # カテゴライズ名を自動でつけるための平均ベクトルを保存しておく.
@@ -88,8 +102,9 @@ def _kmeans_silhouette(embeddings, df_words):
     return cluster_centers, opt_cluster_n
 
 
-def _init_df_cost(cluster_count) -> pd.DataFrame:
-    df_cost = pd.DataFrame({csv_arch.col_c_name: [''] * cluster_count})
+def _init_df_cost(cluster_count, initial_name: str = '') -> pd.DataFrame:
+    df_cost = pd.DataFrame({csv_arch.col_c_name: [initial_name] * cluster_count})
+    anticipate_cost.init_cost_col_both(df_cost)
     return df_cost
 
 
@@ -111,8 +126,6 @@ def _prepare_send(embeddings, df_words, df_cost, cluster_centers, cluster_i, tot
     prompt = _prompt.format(max_str=_max_tokens, search=search_word, intent=intent)
 
     # 利用料金計算（送信分）.
-    anticipate_cost.init_cost_col_both(df_cost)
-
     all_prompt = _role + prompt
     total_usd, total_jy = anticipate_cost.calculate_cost(df_cost, cluster_i, total_usd, total_jy, _use_model,
                                                          send_word=all_prompt)
@@ -152,7 +165,7 @@ def _auto_name(embeddings, df_words, cluster_centers, cluster_count, out_cost):
         # Set response.
         label = response.choices[0].message.content
         df_words.loc[df_words[csv_arch.col_category] == cluster_i, csv_arch.col_c_name] = label
-        print(f"Received API response. cluster_i=[{cluster_i}], label=[{label}]")
+        logging.info(f"Received API response. cluster_i=[{cluster_i}], label=[{label}]")
 
         # 送信結果を元に利用料金算出.
         df_cost.at[cluster_i, csv_arch.col_c_name] = label
@@ -162,13 +175,13 @@ def _auto_name(embeddings, df_words, cluster_centers, cluster_count, out_cost):
     anticipate_cost.print_cost(total_usd, total_jy, pre_msg="Auto Name[real]")
 
     df_cost.to_csv(out_cost, index=True, index_label=csv_arch.col_category)
-    print(f"Costs saved to [{out_cost}].")
+    logging.info(f"Costs saved to [{out_cost}].")
 
 
-def pre_anticipate(in_np=_in_np, in_df=_in_df, out_cost=_out_cost):
+def _pre_anticipate(in_np=_in_np, in_df=_in_df, out_cost=_out_cost_pre):
     # 自動でカテゴリー名決定しない場合はAPI利用料金なし.
     if not _run_auto_name:
-        print("Clustering needs no cost.")
+        logging.info("Clustering needs no cost.")
         return
 
     # クラスター数を決定してAPI利用料金を算出する.
@@ -181,6 +194,7 @@ def pre_anticipate(in_np=_in_np, in_df=_in_df, out_cost=_out_cost):
     df_cost = _init_df_cost(cluster_count)
     total_usd = 0
     total_jy = 0
+
     for cluster_i in range(cluster_count):
         # Send cost.
         total_usd, total_jy, _ = _prepare_send(embeddings, df_words, df_cost, cluster_centers, cluster_i, total_usd,
@@ -191,12 +205,48 @@ def pre_anticipate(in_np=_in_np, in_df=_in_df, out_cost=_out_cost):
 
     # Output cost.
     anticipate_cost.print_cost(total_usd, total_jy, pre_msg="Auto Name[pre]")
-
     df_cost.to_csv(out_cost, index=True, index_label=csv_arch.col_category)
-    print(f"Costs saved to [{out_cost}].")
+    logging.info(f"Costs saved to [{out_cost}].")
 
 
-def main(in_np=_in_np, in_df=_in_df, out_cost=_out_cost, out_cluster=_out_cluster, out_final=_out_final,
+def pre_anticipate(input_path, output_path):
+    # 自動でカテゴリー名を決定しない場合はAPI利用料金なし.
+    if not _run_auto_name:
+        logging.info("Clustering needs no cost.")
+        return
+
+    df_words = pd.read_csv(input_path)
+
+    # クラスター数をMax想定とする。
+    _, max_cluster = _cluster_range(df_words)
+
+    # 各クラスターMaxの検索ワードと意図でプロンプトを生成する想定でコスト予測.
+    max_word_count = df_words[csv_arch.col_target].str.len().max()
+
+    search_sample = anticipate_cost.get_sample_str(max_word_count)
+    intent_sample = anticipate_cost.get_sample_str(get_intent.max_tokens)
+    prompt = _prompt.format(max_str=_max_tokens, search=search_sample, intent=intent_sample)
+    prompt = _role + prompt
+
+    sample_category = 'OpenAIのAPIにより自動でカテゴリ名が決定されます。'
+    df_cost = _init_df_cost(max_cluster, sample_category)
+    total_usd = 0
+    total_jy = 0
+
+    for cluster_i in range(max_cluster):
+        total_usd, total_jy = anticipate_cost.calculate_cost(df_cost, cluster_i, total_usd, total_jy, _use_model,
+                                                             send_word=prompt)
+        total_usd, total_jy = _anticipate_output(df_cost, cluster_i, total_usd, total_jy)
+
+    # Output cost.
+    anticipate_cost.print_cost(total_usd, total_jy, pre_msg="Auto Name[pre]")
+    df_cost.to_csv(output_path, index=True, index_label=csv_arch.col_category)
+    logging.info(f"Costs saved to [{output_path}].")
+
+    return total_usd, total_jy
+
+
+def main(in_np=_in_np, in_df=_in_df, out_cost=_out_cost_run, out_cluster=_out_cluster, out_final=_out_final,
          in_original=_in_original):
     df_words, embeddings = _prepare_data(in_np, in_df)
 
@@ -210,7 +260,7 @@ def main(in_np=_in_np, in_df=_in_df, out_cost=_out_cost, out_cluster=_out_cluste
 
     # 中間ファイルの出力.
     df_words.to_csv(out_cluster)
-    print(f"Clusters saved to [{out_cluster}].")
+    logging.info(f"Clusters saved to [{out_cluster}].")
 
     # 大元のinputにcategoryを追加しただけの最終出力ファイル.
     tmp_category = df_words[csv_arch.col_category]
@@ -228,12 +278,12 @@ def main(in_np=_in_np, in_df=_in_df, out_cost=_out_cost, out_cluster=_out_cluste
         df[csv_arch.col_c_name] = tmp_c_name
 
     df.to_csv(out_final, index=True, index_label=csv_arch.col_df_index)
-    print(f'Categories saved to [{out_final}] finally.')
+    logging.info(f'Categories saved to [{out_final}] finally.')
 
 
 if __name__ == "__main__":
     # Anticipate Cost.
-    # pre_anticipate()
+    # _pre_anticipate()
 
     # Debug.
     secrets.set_api_key('../config/secrets.json')
