@@ -79,6 +79,7 @@ fabric.properties
 *.csv
 !*sample*.csv
 *.npy
+*.log
 */ja.bin
 */model.vec
 config/secrets.json
