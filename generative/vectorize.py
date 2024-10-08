@@ -1,24 +1,26 @@
 from config import api_name, csv_arch, secrets
-from generative import anticipate_cost, get_intent
+from generative import anticipate_cost, common_util, get_intent
 import logging
 import numpy as np
 import openai
 import pandas as pd
 
 # for debug.
-_in_path = '../data/02_intents.csv'
+_path_data = '../data/'
+_in_path = _path_data + '11_intents.csv'
 out_cost_name = 'vector-cost_pre.csv'
 out_cost_pre = '02_' + out_cost_name
 out_cost_name = '12_' + out_cost_name
-_out_cost_pre = '../data/' + out_cost_pre
-_out_cost_run = '../data/' + out_cost_name
+_out_cost_pre = _path_data + out_cost_pre
+_out_cost_run = _path_data + out_cost_name
 out_vector = '13_vector.npy'
-_out_path_vector = '../data/' + out_vector
+_out_path_vector = _path_data + out_vector
 out_vectorize_df = '14_vectorized.csv'
-_out_path_df = '../data/' + out_vectorize_df
+_out_path_df = _path_data + out_vectorize_df
 
 # for this.
 _use_model = api_name.model_emb3l
+_batch_size = 500
 
 
 def _concat_intent(df: pd.DataFrame, intent_str):
@@ -60,21 +62,39 @@ def pre_anticipate(input_path, output_path):
     return total_usd, total_jy
 
 
-def main(input_path=_in_path, output_np=_out_path_vector, out_df=_out_path_df, out_cost=_out_cost_run):
+def main(input_path=_in_path, output_np=_out_path_vector, out_df=_out_path_df, out_cost=_out_cost_run,
+         batch_size=_batch_size):
     # Send by data.
     df = pd.read_csv(input_path)
     _concat_intent(df, df[csv_arch.col_intent])
     _pre_anticipate(df, out_cost)
 
+    # データの総数を取得
+    total_size = len(df[csv_arch.col_vec_org])
+
+    # バッチごとにEmbeddingを生成し保存するリスト
+    all_embeddings = []
+
     logging.info(f"Request API.")
-    response = openai.embeddings.create(
-        model=_use_model,
-        input=df[csv_arch.col_vec_org]
-    )
+    for i in range(0, total_size, batch_size):
+        # データをバッチサイズに分割
+        batch_data = df[csv_arch.col_vec_org][i:i + batch_size].tolist()
+
+        # OpenAI APIを呼び出してEmbeddingを取得
+        response = openai.embeddings.create(
+            model=_use_model,
+            input=batch_data
+        )
+
+        # 結果のembeddingを抽出
+        embeddings = [data.embedding for data in response.data]
+        all_embeddings.extend(embeddings)
+
+        logging.info(f"Processed batch {i // batch_size + 1}/{(total_size + batch_size - 1) // batch_size}")
+
     logging.info(f"Received API response.")
 
-    embeddings = [data.embedding for data in response.data]
-    embeddings = np.array(embeddings)
+    embeddings = np.array(all_embeddings)
 
     np.save(output_np, embeddings)
     logging.info(f"Vectors saved to [{output_np}] .")
@@ -90,5 +110,6 @@ if __name__ == "__main__":
     # _pre_anticipate(df, _out_cost_pre)
 
     # Debug.
+    common_util.initialize_logging(_path_data)
     secrets.set_api_key('../config/secrets.json')
     main()

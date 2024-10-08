@@ -14,10 +14,10 @@ _out_path_intent = '../data/' + out_intent
 # for this.
 _use_model = api_name.model_4o
 _role = "You are an assistant that helps understand user search intent."
-max_tokens = 300
-_prompt = "以下の検索ワードを入力したユーザーの意図を説明してください。"
-_prompt += "一番可能性が高いと推測されるものを一つだけ、日本語で{max_str}文字以内で説明してください。"
-_prompt += ":\n検索ワード: {term}\n意図:"
+max_tokens = 200
+_prompt = "以下の検索ワードを入力したユーザーの意図を説明してください。またどのような属性のユーザーかを説明してください。"
+_prompt += "一番可能性が高いと推測される意図とユーザー属性の組み合わせを一つだけ、日本語で{max_str}文字以内で説明してください。"
+_prompt += ":\n検索ワード: {term}\n検索の意図とユーザー属性:"
 
 
 def _anticipate_input(word, df: pd.DataFrame, i, total_usd, total_jy):

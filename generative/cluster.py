@@ -1,5 +1,5 @@
 from config import api_name, csv_arch, secrets
-from generative import anticipate_cost, get_intent
+from generative import anticipate_cost, common_util, get_intent
 import logging
 import numpy as np
 import openai
@@ -8,18 +8,19 @@ from sklearn import cluster
 from sklearn.metrics import silhouette_score
 
 # for debug.
-_in_np = '../data/04_vector.npy'
-_in_df = '../data/05_vectorized.csv'
+_path_data = '../data/'
+_in_np = _path_data + '13_vector.npy'
+_in_df = _path_data + '14_vectorized.csv'
 out_cost_name = 'cluster-cost'
 out_cost_pre = '03_' + out_cost_name + '_pre.csv'
 out_cost_name = '15' + out_cost_name + '.csv'
-_out_cost_pre = '../data/' + out_cost_pre
-_out_cost_run = '../data/' + out_cost_name
+_out_cost_pre = _path_data + out_cost_pre
+_out_cost_run = _path_data + out_cost_name
 out_cluster_name = '16_cluster.csv'
-_out_cluster = '../data/' + out_cluster_name
+_out_cluster = _path_data + out_cluster_name
 out_final_name = 'categorize_output.csv'
-_out_final = '../data/' + out_final_name
-_in_original = '../data/input_sample.csv'
+_out_final = _path_data + out_final_name
+_in_original = _path_data + 'input_sample.csv'
 
 # for this.
 _run_auto_name = True
@@ -31,10 +32,10 @@ _prompt += "日本語で{max_str}文字以内で説明してください。ラ�
 _prompt += ":\n検索ワード: {search}\n意図:{intent}\nラベル: "
 
 # 各クラスターのデータ数目安.
-_min_data = 1
+_min_data = 20
 _data_count_minus = 2
 
-_max_data = 50
+_max_data = 100
 _min_cluster = 2
 
 
@@ -288,5 +289,6 @@ if __name__ == "__main__":
     # _pre_anticipate()
 
     # Debug.
+    common_util.initialize_logging(_path_data)
     secrets.set_api_key('../config/secrets.json')
     main()
